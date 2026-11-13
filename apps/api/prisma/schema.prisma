@@ -1,0 +1,579 @@
+// DESPACHANTE ERP BRASIL - PRISMA SCHEMA MULTI-TENANT & HIGH CONCURRENCY
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. TENANCY, PLANOS E EMPRESAS
+// ==========================================
+
+enum PlanType {
+  STARTER
+  PROFISSIONAL
+  ENTERPRISE
+  REDES_CONCESSIONARIAS
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ATIVO
+  INADIMPLENTE
+  CANCELADO
+  SUSPENSO
+}
+
+model Plan {
+  id              String         @id @default(uuid())
+  nome            String
+  tipo            PlanType       @unique
+  descricao       String?
+  precoMensal     Decimal        @db.Decimal(10, 2)
+  limiteUsuarios  Int            @default(3)
+  limiteProcessos Int            @default(100) // Processos por mês
+  limiteStorageMb Int            @default(5120) // 5GB
+  limiteWhatsApps Int            @default(1)
+  suportaNfse     Boolean        @default(true)
+  suportaOcr      Boolean        @default(true)
+  suportaDetran   Boolean        @default(true)
+  criadoEm        DateTime       @default(now()) @map("created_at")
+  atualizadoEm    DateTime       @updatedAt @map("updated_at")
+  subscriptions   Subscription[]
+
+  @@map("saas_plans")
+}
+
+model Subscription {
+  id            String             @id @default(uuid())
+  tenantId      String             @unique @map("tenant_id")
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId        String             @map("plan_id")
+  plan          Plan               @relation(fields: [planId], references: [id])
+  status        SubscriptionStatus @default(TRIAL)
+  dataInicio    DateTime           @default(now()) @map("data_inicio")
+  dataFim       DateTime?          @map("data_fim")
+  dataTrialAte  DateTime?          @map("data_trial_ate")
+  valorCobrado  Decimal            @db.Decimal(10, 2) @map("valor_cobrado")
+  diaVencimento Int                @default(10) @map("dia_vencimento")
+  criadoEm      DateTime           @default(now()) @map("created_at")
+  atualizadoEm  DateTime           @updatedAt @map("updated_at")
+
+  @@map("saas_subscriptions")
+}
+
+model Tenant {
+  id              String   @id @default(uuid())
+  razaoSocial     String   @map("razao_social")
+  nomeFantasia    String   @map("nome_fantasia")
+  cnpj            String   @unique
+  ie              String?
+  im              String?
+  email           String
+  telefone        String
+  whatsapp        String?
+  cep             String
+  logradouro      String
+  numero          String
+  complemento     String?
+  bairro          String
+  cidade          String
+  uf              String   @db.VarChar(2)
+  responsavelNome String?  @map("responsavel_nome")
+  responsavelCpf  String?  @map("responsavel_cpf")
+  crddNumero      String?  @map("crdd_numero") // Registro do Despachante Documentalista
+  
+  // Customização de Marca (Predominante Roxo por padrão)
+  logotipoUrl     String?  @map("logotipo_url")
+  corPrimaria     String   @default("#7C3AED") @map("cor_primaria") // Roxo Padrão
+  corSecundaria   String   @default("#4C1D95") @map("cor_secundaria")
+  dominioCustom   String?  @unique @map("dominio_custom")
+  assinaturaEmail String?  @db.Text @map("assinatura_email")
+
+  // Certificado Digital A1 (Criptografado)
+  certificadoA1Path     String?   @map("certificado_a1_path")
+  certificadoA1SenhaEnc String?   @map("certificado_a1_senha_enc")
+  certificadoA1Validade DateTime? @map("certificado_a1_validade")
+  
+  ativo           Boolean  @default(true)
+  criadoEm        DateTime @default(now()) @map("created_at")
+  atualizadoEm    DateTime @updatedAt @map("updated_at")
+  deletadoEm      DateTime? @map("deleted_at")
+
+  // Relacionamentos
+  subscription    Subscription?
+  branches        Branch[]
+  users           User[]
+  customers       Customer[]
+  vehicles        Vehicle[]
+  processes       Process[]
+  financialTx     FinancialTransaction[]
+  fiscalDocs      FiscalDocument[]
+  whatsInstances  WhatsAppInstance[]
+  auditLogs       AuditLog[]
+
+  @@index([cnpj])
+  @@index([deletadoEm])
+  @@map("tenants")
+}
+
+model Branch {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome         String
+  codigo       String?
+  cnpj         String?
+  email        String?
+  telefone     String?
+  cidade       String
+  uf           String    @db.VarChar(2)
+  isMatriz     Boolean   @default(false) @map("is_matriz")
+  ativo        Boolean   @default(true)
+  criadoEm     DateTime  @default(now()) @map("created_at")
+  atualizadoEm DateTime  @updatedAt @map("updated_at")
+  deletadoEm   DateTime? @map("deleted_at")
+
+  users        User[]
+  processes    Process[]
+
+  @@index([tenantId])
+  @@map("branches")
+}
+
+// ==========================================
+// 2. IDENTIDADE, USUÁRIOS E RBAC
+// ==========================================
+
+model User {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branchId     String?   @map("branch_id")
+  branch       Branch?   @relation(fields: [branchId], references: [id])
+  supabaseUid  String?   @unique @map("supabase_uid")
+  nome         String
+  email        String    @unique
+  senhaHash    String    @map("senha_hash")
+  telefone     String?
+  cargo        String?
+  role         String    @default("OPERACIONAL") // UserRoleEnum
+  mfaAtivo     Boolean   @default(false) @map("mfa_ativo")
+  ativo        Boolean   @default(true)
+  ultimoAcesso DateTime? @map("ultimo_acesso")
+  criadoEm     DateTime  @default(now()) @map("created_at")
+  atualizadoEm DateTime  @updatedAt @map("updated_at")
+  deletadoEm   DateTime? @map("deleted_at")
+
+  processesResponsible Process[] @relation("ProcessResponsible")
+  createdProcesses     Process[] @relation("ProcessCreatedBy")
+  auditLogs            AuditLog[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+// ==========================================
+// 3. CRM - CLIENTES E OPORTUNIDADES
+// ==========================================
+
+enum CustomerType {
+  PF
+  PJ
+}
+
+model Customer {
+  id              String       @id @default(uuid())
+  tenantId        String       @map("tenant_id")
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tipo            CustomerType @default(PF)
+  
+  // Dados PF
+  nome            String
+  cpf             String?
+  rg              String?
+  cnh             String?
+  validadeCnh     DateTime?    @map("validade_cnh")
+  
+  // Dados PJ
+  razaoSocial     String?      @map("razao_social")
+  nomeFantasia    String?      @map("nome_fantasia")
+  cnpj            String?
+  ie              String?
+  im              String?
+  responsavelNome String?      @map("responsavel_nome")
+  responsavelCpf  String?      @map("responsavel_cpf")
+
+  // Contato & Endereço
+  email           String
+  telefone        String
+  whatsapp        String?
+  cep             String
+  logradouro      String
+  numero          String
+  complemento     String?
+  bairro          String
+  cidade          String
+  uf              String       @db.VarChar(2)
+
+  // CRM & Pipeline
+  origemLead      String?      @map("origem_lead") // Ex: Indicação, Balcão, Google, Revenda
+  limiteCredito   Decimal      @default(0) @db.Decimal(10, 2) @map("limite_credito")
+  observacoes     String?      @db.Text
+  ativo           Boolean      @default(true)
+  criadoEm        DateTime     @default(now()) @map("created_at")
+  atualizadoEm    DateTime     @updatedAt @map("updated_at")
+  deletadoEm      DateTime?    @map("deleted_at")
+
+  vehicles        Vehicle[]
+  processes       Process[]
+  financialTx     FinancialTransaction[]
+
+  @@index([tenantId])
+  @@index([cpf])
+  @@index([cnpj])
+  @@map("customers")
+}
+
+// ==========================================
+// 4. CADASTRO DE VEÍCULOS
+// ==========================================
+
+model Vehicle {
+  id             String    @id @default(uuid())
+  tenantId       String    @map("tenant_id")
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clienteId      String?   @map("cliente_id")
+  cliente        Customer? @relation(fields: [clienteId], references: [id])
+  
+  placa          String    @db.VarChar(8)
+  renavam        String    @db.VarChar(11)
+  chassi         String    @db.VarChar(17)
+  motor          String?
+  marca          String
+  modelo         String
+  versao         String?
+  cor            String
+  categoria      String    @default("PARTICULAR")
+  tipo           String    @default("AUTOMOVEL")
+  anoFabricacao  Int       @map("ano_fabricacao")
+  anoModelo      Int       @map("ano_modelo")
+  combustivel    String    @default("FLEX")
+  uf             String    @db.VarChar(2)
+  municipio      String
+  
+  // Status de Restrições
+  temAlienacao   Boolean   @default(false) @map("tem_alienacao")
+  temSinistro    Boolean   @default(false) @map("tem_sinistro")
+  temBloqueioJud Boolean   @default(false) @map("tem_bloqueio_jud")
+  temMultas      Boolean   @default(false) @map("tem_multas")
+  
+  observacoes    String?   @db.Text
+  criadoEm       DateTime  @default(now()) @map("created_at")
+  atualizadoEm   DateTime  @updatedAt @map("updated_at")
+  deletadoEm     DateTime? @map("deleted_at")
+
+  processes      Process[]
+  restrictions   VehicleRestriction[]
+
+  @@index([tenantId])
+  @@index([placa])
+  @@index([renavam])
+  @@index([chassi])
+  @@map("vehicles")
+}
+
+model VehicleRestriction {
+  id           String    @id @default(uuid())
+  vehicleId    String    @map("vehicle_id")
+  vehicle      Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  tipo         String    // ALIENAÇÃO, JUDICIAL, ROUBO/FURTO, ADMINISTRATIVO
+  descricao    String
+  orgao        String?
+  dataRegistro DateTime? @map("data_registro")
+  ativo        Boolean   @default(true)
+  criadoEm     DateTime  @default(now()) @map("created_at")
+
+  @@map("vehicle_restrictions")
+}
+
+// ==========================================
+// 5. MOTOR DE PROCESSOS & WORKFLOW VEICULAR
+// ==========================================
+
+model Process {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branchId        String?   @map("branch_id")
+  branch          Branch?   @relation(fields: [branchId], references: [id])
+  clienteId       String    @map("cliente_id")
+  cliente         Customer  @relation(fields: [clienteId], references: [id])
+  veiculoId       String    @map("veiculo_id")
+  veiculo         Vehicle   @relation(fields: [veiculoId], references: [id])
+  responsavelId   String?   @map("responsavel_id")
+  responsavel     User?     @relation("ProcessResponsible", fields: [responsavelId], references: [id])
+  criadoPorId     String?   @map("criado_por_id")
+  criadoPor       User?     @relation("ProcessCreatedBy", fields: [criadoPorId], references: [id])
+
+  protocolo       String    @unique // Código amigável: PROC-2026-0001
+  tipoServico     String    @map("tipo_servico") // ServiceTypeEnum
+  status          String    @default("TRIAGEM") // ProcessStatusEnum
+  prioridade      String    @default("NORMAL") // ProcessPriorityEnum
+  
+  // SLA e Prazos
+  prazoSla        DateTime? @map("prazo_sla")
+  concluidoEm     DateTime? @map("concluido_em")
+
+  // Valores Financeiros do Processo
+  valorHonorarios Decimal   @default(0) @db.Decimal(10, 2) @map("valor_honorarios")
+  valorTaxas      Decimal   @default(0) @db.Decimal(10, 2) @map("valor_taxas")
+  valorTotal      Decimal   @default(0) @db.Decimal(10, 2) @map("valor_total")
+  pago            Boolean   @default(false)
+
+  // Integração Órgão / DETRAN
+  protocoloDetran String?   @map("protocolo_detran")
+  orgaoUf         String    @default("SP") @map("orgao_uf") @db.VarChar(2)
+
+  observacoes     String?   @db.Text
+  criadoEm        DateTime  @default(now()) @map("created_at")
+  atualizadoEm    DateTime  @updatedAt @map("updated_at")
+  deletadoEm      DateTime? @map("deleted_at")
+
+  stages          ProcessStage[]
+  checklists      ProcessChecklist[]
+  documents       ProcessDocument[]
+  signatures      SignatureEnvelope[]
+  financialTx     FinancialTransaction[]
+  pixCharges      PixCharge[]
+
+  @@index([tenantId])
+  @@index([protocolo])
+  @@index([status])
+  @@index([clienteId])
+  @@index([veiculoId])
+  @@map("processes")
+}
+
+model ProcessStage {
+  id           String    @id @default(uuid())
+  processId    String    @map("process_id")
+  process      Process   @relation(fields: [processId], references: [id], onDelete: Cascade)
+  nomeEtapa    String    @map("nome_etapa")
+  statusOrigem String?   @map("status_origem")
+  statusNovo   String    @map("status_novo")
+  comentarios  String?   @db.Text
+  operadorNome String?   @map("operador_nome")
+  dataEntrada  DateTime  @default(now()) @map("data_entrada")
+  dataSaida    DateTime? @map("data_saida")
+
+  @@map("process_stages")
+}
+
+model ProcessChecklist {
+  id           String    @id @default(uuid())
+  processId    String    @map("process_id")
+  process      Process   @relation(fields: [processId], references: [id], onDelete: Cascade)
+  descricao    String
+  obrigatorio  Boolean   @default(true)
+  concluido    Boolean   @default(false)
+  concluidoPor String?   @map("concluido_por")
+  concluidoEm  DateTime? @map("concluido_em")
+
+  @@map("process_checklists")
+}
+
+// ==========================================
+// 6. GESTÃO DOCUMENTAL, OCR E ASSINATURAS
+// ==========================================
+
+model ProcessDocument {
+  id           String    @id @default(uuid())
+  processId    String    @map("process_id")
+  process      Process   @relation(fields: [processId], references: [id], onDelete: Cascade)
+  tipo         String    // DocumentTypeEnum
+  titulo       String
+  storagePath  String    @map("storage_path")
+  nomeArquivo  String    @map("nome_arquivo")
+  tamanhoBytes Int       @map("tamanho_bytes")
+  mimeType     String    @map("mime_type")
+  sha256Hash   String?   @map("sha256_hash")
+  validado     Boolean   @default(false)
+  
+  ocr          DocumentOcr?
+  criadoEm     DateTime  @default(now()) @map("created_at")
+  atualizadoEm DateTime  @updatedAt @map("updated_at")
+
+  @@map("process_documents")
+}
+
+model DocumentOcr {
+  id           String          @id @default(uuid())
+  documentId   String          @unique @map("document_id")
+  document     ProcessDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  status       String          @default("PROCESSANDO") // OcrStatusEnum
+  confianca    Float?          // Score 0.0 - 1.0
+  dadosJson    Json?           @map("dados_json") // { nome, cpf, renavam, placa, dataValidade, etc }
+  textoBruto   String?         @db.Text @map("texto_bruto")
+  processadoEm DateTime?       @map("processado_em")
+
+  @@map("document_ocrs")
+}
+
+model SignatureEnvelope {
+  id             String    @id @default(uuid())
+  processId      String    @map("process_id")
+  process        Process   @relation(fields: [processId], references: [id], onDelete: Cascade)
+  provedor       String    @default("INTERNO_QUALIFICADO") // SignatureProviderEnum
+  status         String    @default("PENDENTE") // SignatureStatusEnum
+  signatarioNome String    @map("signatario_nome")
+  signatarioCpf  String    @map("signatario_cpf")
+  signatarioEmail String   @map("signatario_email")
+  tokenAssinatura String   @unique @map("token_assinatura")
+  hashDocumento  String?   @map("hash_documento")
+  ipSignatario   String?   @map("ip_signatario")
+  assinadoEm     DateTime? @map("assinado_em")
+  criadoEm       DateTime  @default(now()) @map("created_at")
+
+  @@map("signature_envelopes")
+}
+
+// ==========================================
+// 7. FINANCEIRO E MOTOR PIX
+// ==========================================
+
+model FinancialTransaction {
+  id             String    @id @default(uuid())
+  tenantId       String    @map("tenant_id")
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  processId      String?   @map("process_id")
+  process        Process?  @relation(fields: [processId], references: [id])
+  clienteId      String?   @map("cliente_id")
+  cliente        Customer? @relation(fields: [clienteId], references: [id])
+
+  tipo           String    // RECEITA ou DESPESA
+  categoria      String    // FinancialCategoryEnum (Segregação de Honorários vs Taxas de Terceiros)
+  isTaxaTerceiro Boolean   @default(false) @map("is_taxa_terceiro") // Fundamental para DRE de despachante!
+  descricao      String
+  valor          Decimal   @db.Decimal(10, 2)
+  formaPagamento String    @default("PIX") // PaymentMethodEnum
+  status         String    @default("PENDENTE") // TransactionStatusEnum
+  dataVencimento DateTime  @map("data_vencimento")
+  dataPagamento  DateTime? @map("data_pagamento")
+  
+  criadoEm       DateTime  @default(now()) @map("created_at")
+  atualizadoEm   DateTime  @updatedAt @map("updated_at")
+  deletadoEm     DateTime? @map("deleted_at")
+
+  pixCharge      PixCharge?
+
+  @@index([tenantId])
+  @@index([processId])
+  @@index([status])
+  @@index([isTaxaTerceiro])
+  @@map("financial_transactions")
+}
+
+model PixCharge {
+  id              String                @id @default(uuid())
+  transactionId   String?               @unique @map("transaction_id")
+  transaction     FinancialTransaction? @relation(fields: [transactionId], references: [id])
+  processId       String?               @map("process_id")
+  process         Process?              @relation(fields: [processId], references: [id])
+  
+  txid            String                @unique
+  endToEndId      String?               @unique @map("end_to_end_id")
+  valor           Decimal               @db.Decimal(10, 2)
+  chavePix        String                @map("chave_pix")
+  copiaECola      String                @db.Text @map("copia_e_cola")
+  qrCodeBase64    String                @db.Text @map("qr_code_base64")
+  status          String                @default("PENDENTE")
+  expiraEm        DateTime              @map("expira_em")
+  pagoEm          DateTime?             @map("pago_em")
+  criadoEm        DateTime              @default(now()) @map("created_at")
+
+  @@map("pix_charges")
+}
+
+// ==========================================
+// 8. MÓDULO FISCAL BRASILEIRO (NFS-E / NF-E)
+// ==========================================
+
+model FiscalDocument {
+  id             String    @id @default(uuid())
+  tenantId       String    @map("tenant_id")
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tipoDocumento  String    @default("NFSE") // FiscalDocumentTypeEnum
+  status         String    @default("RASCUNHO") // FiscalStatusEnum
+  numero         Int?
+  serie          String?   @default("1")
+  chaveAcesso    String?   @unique @map("chave_acesso")
+  protocoloAutorizacao String? @map("protocolo_autorizacao")
+  
+  // Tributação
+  valorServicos  Decimal   @default(0) @db.Decimal(10, 2) @map("valor_servicos")
+  valorDeducoes  Decimal   @default(0) @db.Decimal(10, 2) @map("valor_deducoes") // Taxas repassadas dedutíveis de ISS
+  aliquotaIss    Decimal   @default(0) @db.Decimal(5, 2) @map("aliquota_iss")
+  valorIss       Decimal   @default(0) @db.Decimal(10, 2) @map("valor_iss")
+  
+  xmlAssinado    String?   @db.Text @map("xml_assinado")
+  pdfDanfeUrl    String?   @map("pdf_danfe_url")
+  motivoRejeicao String?   @db.Text @map("motivo_rejeicao")
+  
+  emitidoEm      DateTime? @map("emitido_em")
+  criadoEm       DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("fiscal_documents")
+}
+
+// ==========================================
+// 9. WHATSAPP & CENTRAL DE COMUNICAÇÃO
+// ==========================================
+
+model WhatsAppInstance {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nomeInstancia String   @map("nome_instancia")
+  numeroTelefone String? @map("numero_telefone")
+  status       String    @default("DESCONECTADO") // CONECTADO, DESCONECTADO, QRCODE
+  qrCodeBase64 String?   @db.Text @map("qr_code_base64")
+  webhookToken String?   @map("webhook_token")
+  iaAtiva      Boolean   @default(true) @map("ia_ativa")
+  criadoEm     DateTime  @default(now()) @map("created_at")
+  atualizadoEm DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@map("whatsapp_instances")
+}
+
+// ==========================================
+// 10. AUDITORIA COMPLETA & COMPLIANCE LGPD
+// ==========================================
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId       String?  @map("user_id")
+  user         User?    @relation(fields: [userId], references: [id])
+  acao         String   // LOGIN, LOGOUT, CRIACAO, ALTERACAO, EXCLUSAO, EMISSAO_FISCAL
+  entidade     String   // Processo, Cliente, Veículo, Transação, etc.
+  entidadeId   String?  @map("entidade_id")
+  dadosAnteriores Json?  @map("dados_anteriores")
+  dadosNovos      Json?  @map("dados_novos")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  criadoEm     DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@index([entidade, entidadeId])
+  @@index([criadoEm])
+  @@map("audit_logs")
+}

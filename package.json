@@ -1,0 +1,37 @@
+{
+  "name": "despachante-erp-brasil",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DESPACHANTE ERP BRASIL - Plataforma SaaS Multiempresa e Multitenant de Missão Crítica para Despachantes Veiculares",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "dev:api": "pnpm --filter @despachante/api dev",
+    "dev:web": "pnpm --filter @despachante/web dev",
+    "build": "pnpm --recursive run build",
+    "test": "pnpm --recursive run test",
+    "lint": "pnpm --recursive run lint",
+    "db:generate": "pnpm --filter @despachante/api db:generate",
+    "db:push": "pnpm --filter @despachante/api db:push",
+    "db:seed": "pnpm --filter @despachante/api db:seed",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down"
+  },
+  "keywords": [
+    "despachante",
+    "erp",
+    "saas",
+    "multitenant",
+    "detran",
+    "senatran",
+    "veiculos",
+    "nextjs",
+    "nestjs",
+    "prisma"
+  ],
+  "author": "Despachante ERP Brasil Team",
+  "license": "PROPRIETARY",
+  "packageManager": "pnpm@10.16.1",
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

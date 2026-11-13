@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 270 20% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 270 20% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 270 20% 11%;
+
+    /* Roxo Predominante Deep Violet #7C3AED */
+    --primary: 263.4 70% 50.4%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 270 20% 96%;
+    --secondary-foreground: 263.4 70% 35%;
+
+    --muted: 270 10% 96%;
+    --muted-foreground: 270 10% 45%;
+
+    --accent: 263.4 70% 95%;
+    --accent-foreground: 263.4 70% 35%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 270 15% 90%;
+    --input: 270 15% 90%;
+    --ring: 263.4 70% 50.4%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 270 30% 6%;
+    --foreground: 270 10% 98%;
+
+    --card: 270 25% 10%;
+    --card-foreground: 270 10% 98%;
+
+    --popover: 270 25% 10%;
+    --popover-foreground: 270 10% 98%;
+
+    /* Roxo Vibrante Neon / Dark Mode #8B5CF6 */
+    --primary: 258 90% 66%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 270 20% 16%;
+    --secondary-foreground: 270 10% 98%;
+
+    --muted: 270 20% 16%;
+    --muted-foreground: 270 10% 65%;
+
+    --accent: 263.4 50% 20%;
+    --accent-foreground: 270 10% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 270 20% 18%;
+    --input: 270 20% 18%;
+    --ring: 258 90% 66%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}

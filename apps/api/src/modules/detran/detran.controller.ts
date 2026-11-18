@@ -51,4 +51,10 @@ export class DetranController {
   ) {
     return this.detranService.transmitirProcesso(body.uf || 'SP', body.dadosProcesso);
   }
+
+  @Get('status')
+  @ApiOperation({ summary: 'Consultar status dos provedores DETRAN e credenciais de integração' })
+  async getStatus() {
+    return this.detranService.getStatus();
+  }
 }

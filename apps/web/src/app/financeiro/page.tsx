@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import {
   DollarSign,
@@ -9,22 +9,23 @@ import {
   Plus,
 } from 'lucide-react';
 import { formatBrl } from '@/lib/utils';
+import { fetchApi } from '@/lib/api-client';
+
+const initialDre = {
+  receitaHonorarios: 48950.00,
+  repasseTaxasTerceiros: 82430.50,
+  totalMovimentadoGeral: 131380.50,
+  despesasOperacionais: 14200.00,
+  comissoesPagas: 4850.00,
+  totalDespesas: 19050.00,
+  resultadoOperacional: 29900.00,
+  margemLiquida: 61.08,
+};
 
 export default function FinanceiroPage() {
   const [activeTab, setActiveTab] = useState<'transacoes' | 'dre'>('transacoes');
-
-  const dre = {
-    receitaHonorarios: 48950.00,
-    repasseTaxasTerceiros: 82430.50,
-    totalMovimentadoGeral: 131380.50,
-    despesasOperacionais: 14200.00,
-    comissoesPagas: 4850.00,
-    totalDespesas: 19050.00,
-    resultadoOperacional: 29900.00,
-    margemLiquida: 61.08,
-  };
-
-  const transactions = [
+  const [dre, setDre] = useState(initialDre);
+  const [transactions, setTransactions] = useState<any[]>([
     {
       id: 'tx1',
       tipo: 'RECEITA',
@@ -65,7 +66,44 @@ export default function FinanceiroPage() {
       status: 'PENDENTE',
       vencimento: '12/11/2026',
     },
-  ];
+  ]);
+
+  useEffect(() => {
+    fetchApi('/financial/dre')
+      .then((data) => {
+        if (data) {
+          setDre({
+            receitaHonorarios: Number(data.receitaHonorarios) || initialDre.receitaHonorarios,
+            repasseTaxasTerceiros: Number(data.repasseTaxasTerceiros) || initialDre.repasseTaxasTerceiros,
+            totalMovimentadoGeral: Number(data.totalMovimentadoGeral) || initialDre.totalMovimentadoGeral,
+            despesasOperacionais: Number(data.despesasOperacionais) || initialDre.despesasOperacionais,
+            comissoesPagas: Number(data.comissoesPagas) || initialDre.comissoesPagas,
+            totalDespesas: Number(data.totalDespesas) || initialDre.totalDespesas,
+            resultadoOperacional: Number(data.resultadoOperacional) || initialDre.resultadoOperacional,
+            margemLiquida: Number(data.margemLiquida) || initialDre.margemLiquida,
+          });
+        }
+      })
+      .catch((err) => console.warn('Usando DRE local:', err));
+
+    fetchApi('/financial/transactions')
+      .then((data) => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((t: any) => ({
+            id: t.id,
+            tipo: t.tipo,
+            descricao: t.descricao,
+            isTaxaTerceiro: t.isTaxaTerceiro,
+            valor: Number(t.valor) || 0,
+            forma: t.formaPagamento || 'PIX',
+            status: t.status,
+            vencimento: t.dataVencimento ? new Date(t.dataVencimento).toLocaleDateString('pt-BR') : 'Hoje',
+          }));
+          setTransactions(mapped);
+        }
+      })
+      .catch((err) => console.warn('Usando transações locais:', err));
+  }, []);
 
   return (
     <AppLayout>

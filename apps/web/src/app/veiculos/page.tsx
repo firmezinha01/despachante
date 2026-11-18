@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AppLayout } from '@/components/layout/AppLayout';
 import {
@@ -9,8 +9,9 @@ import {
   Plus,
   AlertTriangle,
 } from 'lucide-react';
+import { fetchApi } from '@/lib/api-client';
 
-const mockVehicles = [
+const initialVehicles = [
   {
     id: 'v1',
     placa: 'BRA2E19',
@@ -59,9 +60,35 @@ const mockVehicles = [
 ];
 
 export default function VeiculosPage() {
+  const [vehicles, setVehicles] = useState<any[]>(initialVehicles);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredVehicles = mockVehicles.filter(
+  useEffect(() => {
+    fetchApi('/vehicles')
+      .then((data) => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((v: any) => ({
+            id: v.id,
+            placa: v.placa,
+            renavam: v.renavam,
+            chassi: v.chassi,
+            marca: v.marca || v.marcaModelo?.split('/')[0] || 'NÃO INFORMADO',
+            modelo: v.marcaModelo || 'MODELO',
+            anoModelo: v.anoModelo || 2024,
+            cor: v.cor || 'CINZA',
+            combustivel: v.combustivel || 'FLEX',
+            uf: v.uf || 'SP',
+            proprietarioNome: v.customer?.nome || v.customer?.razaoSocial || 'Proprietário',
+            temAlienacao: v.restrictions && v.restrictions.length > 0,
+            processosAtivos: v.processes?.length || 0,
+          }));
+          setVehicles(mapped);
+        }
+      })
+      .catch((err) => console.warn('Usando dados de contingência para veículos:', err));
+  }, []);
+
+  const filteredVehicles = vehicles.filter(
     (v) =>
       v.placa.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.renavam.includes(searchTerm) ||

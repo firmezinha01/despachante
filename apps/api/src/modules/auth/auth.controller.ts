@@ -4,8 +4,17 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser, RequestUser } from '../../common/decorators/current-user.decorator';
 
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+
 class LoginDto {
+  @ApiProperty({ example: 'admin@despachante.com.br' })
+  @IsEmail({}, { message: 'Formato de e-mail inválido' })
   email: string;
+
+  @ApiProperty({ example: 'Admin@123456' })
+  @IsString()
+  @IsNotEmpty({ message: 'A senha é obrigatória' })
   senha: string;
 }
 

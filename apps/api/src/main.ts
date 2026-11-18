@@ -26,7 +26,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new TenancyInterceptor());
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
+      whitelist: false,
       transform: true,
       forbidNonWhitelisted: false,
     }),

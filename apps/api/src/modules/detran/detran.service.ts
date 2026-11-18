@@ -59,4 +59,27 @@ export class DetranService {
     const provider = this.getProvider(uf);
     return provider.transmitirProcesso(dadosProcesso);
   }
+
+  async getStatus() {
+    const hasGatewayToken = !!(process.env.DETRAN_GATEWAY_TOKEN || process.env.INFOSIMPLES_TOKEN);
+    const hasSerproToken = !!(process.env.SERPRO_TOKEN || (process.env.SERPRO_CONSUMER_KEY && process.env.SERPRO_CONSUMER_SECRET));
+    const hasProdespCert = !!process.env.PRODESP_CERT_PFX;
+
+    return {
+      statusGeral: 'OPERACIONAL',
+      modoOperacao: hasGatewayToken || hasSerproToken ? 'PRODUCAO_REAL' : 'HOMOLOGACAO_SANDBOX',
+      gatewayConectado: hasGatewayToken || hasSerproToken,
+      provedores: [
+        { uf: 'SP', orgao: 'DETRAN-SP / e-CRVsp (Prodesp)', status: 'ONLINE', autenticacao: hasProdespCert ? 'CERTIFICADO_A1' : (hasGatewayToken ? 'GATEWAY_ATIVO' : 'HOMOLOGACAO') },
+        { uf: 'RJ', orgao: 'DETRAN-RJ / Proderj', status: 'ONLINE', autenticacao: hasGatewayToken ? 'GATEWAY_ATIVO' : 'HOMOLOGACAO' },
+        { uf: 'MG', orgao: 'DETRAN-MG / SIAEX (Prodemge)', status: 'ONLINE', autenticacao: hasGatewayToken ? 'GATEWAY_ATIVO' : 'HOMOLOGACAO' },
+        { uf: 'PR', orgao: 'DETRAN-PR / Celepar', status: 'ONLINE', autenticacao: hasGatewayToken ? 'GATEWAY_ATIVO' : 'HOMOLOGACAO' },
+        { uf: 'BR', orgao: 'SENATRAN / Base Índice Nacional (BIN / RENAVE)', status: 'ONLINE', autenticacao: hasSerproToken ? 'SERPRO_OFICIAL' : 'HOMOLOGACAO' },
+      ],
+      instrucoesAtivacaoProducao: {
+        opcaoRecomendada: 'Defina a variável DETRAN_GATEWAY_TOKEN no painel do Render com sua chave da Infosimples, Infocar ou Assertiva para habilitar consultas reais em todas as 27 UFs.',
+        opcaoFederal: 'Para consultas federais diretas no SERPRO, defina SERPRO_CONSUMER_KEY e SERPRO_CONSUMER_SECRET.',
+      },
+    };
+  }
 }

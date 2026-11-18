@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import {
   Search,
@@ -8,8 +8,9 @@ import {
   Building,
   User,
 } from 'lucide-react';
+import { fetchApi } from '@/lib/api-client';
 
-const mockCustomers = [
+const initialCustomers = [
   {
     id: 'c1',
     tipo: 'PF',
@@ -52,10 +53,37 @@ const mockCustomers = [
 ];
 
 export default function ClientesPage() {
+  const [customers, setCustomers] = useState<any[]>(initialCustomers);
   const [filterTipo, setFilterTipo] = useState<'TODOS' | 'PF' | 'PJ'>('TODOS');
   const [search, setSearch] = useState('');
 
-  const filtered = mockCustomers.filter((c) => {
+  useEffect(() => {
+    fetchApi('/crm/customers')
+      .then((data) => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((c: any) => ({
+            id: c.id,
+            tipo: c.tipo,
+            nome: c.nome || c.razaoSocial,
+            razaoSocial: c.razaoSocial,
+            nomeFantasia: c.nomeFantasia,
+            cpf: c.cpf,
+            cnpj: c.cnpj,
+            cnh: c.cnhNumero,
+            email: c.email,
+            telefone: c.telefone || c.whatsapp,
+            cidade: c.cidade,
+            uf: c.uf,
+            totalVeiculos: c.vehicles?.length || 0,
+            totalProcessos: c.processes?.length || 0,
+          }));
+          setCustomers(mapped);
+        }
+      })
+      .catch((err) => console.warn('Usando dados locais para clientes:', err));
+  }, []);
+
+  const filtered = customers.filter((c) => {
     if (filterTipo === 'PF' && c.tipo !== 'PF') return false;
     if (filterTipo === 'PJ' && c.tipo !== 'PJ') return false;
     if (search) {

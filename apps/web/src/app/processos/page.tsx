@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import {
   KanbanSquare,
@@ -14,6 +14,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { formatBrl } from '@/lib/utils';
+import { fetchApi } from '@/lib/api-client';
 
 interface ProcessItem {
   id: string;
@@ -139,21 +140,82 @@ export default function ProcessosPage() {
   const [selectedProcess, setSelectedProcess] = useState<ProcessItem | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
 
-  const handleToggleChecklist = (checkId: string) => {
+  // Sincroniza processos com a API no Render / Supabase
+  useEffect(() => {
+    fetchApi('/processes')
+      .then((data) => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          const mapped: ProcessItem[] = data.map((p: any) => ({
+            id: p.id,
+            protocolo: p.protocolo,
+            tipoServico: p.tipoServico,
+            placa: p.vehicle?.placa || 'SEM PLACA',
+            modelo: p.vehicle?.marcaModelo || 'MODELO NÃO IDENTIFICADO',
+            clienteNome: p.customer?.nome || p.customer?.razaoSocial || 'Cliente',
+            status: p.status,
+            prioridade: p.prioridade || 'NORMAL',
+            prazoSla: p.prazoSla ? new Date(p.prazoSla).toLocaleDateString('pt-BR') : 'A DEFINIR',
+            valorHonorarios: Number(p.valorHonorarios) || 0,
+            valorTaxas: Number(p.valorTaxas) || 0,
+            valorTotal: Number(p.valorTotal) || 0,
+            pago: p.pago || false,
+            protocoloDetran: p.protocoloDetran,
+            checklists: p.checklists?.map((c: any) => ({
+              id: c.id,
+              descricao: c.descricao,
+              obrigatorio: c.obrigatorio,
+              concluido: c.concluido,
+            })) || [],
+            documents: p.documents?.map((d: any) => ({
+              id: d.id,
+              titulo: d.nomeArquivo || 'Documento',
+              tipo: d.tipo,
+              ocr: d.ocrData,
+            })) || [],
+          }));
+          setProcesses(mapped);
+        }
+      })
+      .catch((err) => console.warn('Usando dados de contingência para processos:', err));
+  }, []);
+
+  const handleToggleChecklist = async (checkId: string) => {
     if (!selectedProcess) return;
+    const target = selectedProcess.checklists.find((c) => c.id === checkId);
+    if (!target) return;
+    const novoConcluido = !target.concluido;
+
     const updatedChecklists = selectedProcess.checklists.map((c) =>
-      c.id === checkId ? { ...c, concluido: !c.concluido } : c,
+      c.id === checkId ? { ...c, concluido: novoConcluido } : c,
     );
     const updatedProc = { ...selectedProcess, checklists: updatedChecklists };
     setSelectedProcess(updatedProc);
     setProcesses((prev) => prev.map((p) => (p.id === updatedProc.id ? updatedProc : p)));
+
+    try {
+      await fetchApi(`/processes/${selectedProcess.id}/checklist/${checkId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ concluido: novoConcluido }),
+      });
+    } catch (e) {
+      console.warn('Erro ao sincronizar checklist no backend:', e);
+    }
   };
 
-  const handleAdvanceStage = (novoStatus: string) => {
+  const handleAdvanceStage = async (novoStatus: string) => {
     if (!selectedProcess) return;
     const updatedProc = { ...selectedProcess, status: novoStatus };
     setSelectedProcess(updatedProc);
     setProcesses((prev) => prev.map((p) => (p.id === updatedProc.id ? updatedProc : p)));
+
+    try {
+      await fetchApi(`/processes/${selectedProcess.id}/stage`, {
+        method: 'PUT',
+        body: JSON.stringify({ novoStatus }),
+      });
+    } catch (e) {
+      console.warn('Erro ao sincronizar etapa no backend:', e);
+    }
   };
 
   const pixPayloadSample =

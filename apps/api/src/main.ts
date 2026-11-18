@@ -9,8 +9,10 @@ async function bootstrap() {
   const logger = new Logger('DespachanteERP-Bootstrap');
   const app = await NestFactory.create(AppModule);
 
-  // Prefixo Global da API
-  app.setGlobalPrefix('api/v1');
+  // Prefixo Global da API (com exceção para rota raiz de health check)
+  app.setGlobalPrefix('api/v1', {
+    exclude: ['/', 'healthz'],
+  });
 
   // CORS habilitado para Next.js, Portal do Cliente e App Flutter
   app.enableCors({

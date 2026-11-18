@@ -1,5 +1,6 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AppController } from './app.controller';
 import { PrismaService } from './common/prisma/prisma.service';
 import { RedisService } from './common/redis/redis.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -37,6 +38,7 @@ import { AuditModule } from './modules/audit/audit.module';
     DashboardModule,
     AuditModule,
   ],
+  controllers: [AppController],
   providers: [PrismaService, RedisService],
   exports: [PrismaService, RedisService],
 })

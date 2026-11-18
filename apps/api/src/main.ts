@@ -14,11 +14,12 @@ async function bootstrap() {
     exclude: ['/', 'healthz'],
   });
 
-  // CORS habilitado para Next.js, Portal do Cliente e App Flutter
+  // CORS habilitado para Next.js na Vercel, Portal do Cliente e App Flutter
   app.enableCors({
-    origin: '*',
+    origin: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    allowedHeaders: 'Content-Type,Authorization,x-tenant-id,Accept',
   });
 
   // Filtros e Interceptors Globais

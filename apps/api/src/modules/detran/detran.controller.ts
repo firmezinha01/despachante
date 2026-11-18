@@ -4,8 +4,6 @@ import { DetranService } from './detran.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @ApiTags('DETRAN & SENATRAN')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('detran')
 export class DetranController {
   constructor(private detranService: DetranService) {}

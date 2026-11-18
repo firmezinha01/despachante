@@ -46,7 +46,7 @@ async function bootstrap() {
   });
 
   const port = process.env.PORT || 3001;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.log(`🚀 DESPACHANTE ERP BRASIL API operacional na porta ${port}`);
   logger.log(`📚 Documentação Swagger disponível em http://localhost:${port}/api/docs`);
 }

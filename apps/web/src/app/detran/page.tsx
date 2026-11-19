@@ -198,13 +198,35 @@ export default function DetranPage() {
                   ? 'Conexão com a Infosimples bem-sucedida! O token é válido.'
                   : `Retorno da Infosimples (Código ${gatewayDiagnostic.codigo || 'Erro'}):`}
               </p>
-              {gatewayDiagnostic.tokenMasked && (
-                <p className="text-[11px] font-mono text-purple-700 dark:text-purple-300">
-                  Token detectado no Render: <strong>{gatewayDiagnostic.tokenMasked}</strong>
-                </p>
-              )}
-              <p className="text-[11px] opacity-90">{gatewayDiagnostic.mensagem}</p>
-              {!gatewayDiagnostic.sucesso && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-700 dark:text-slate-300">
+                {gatewayDiagnostic.tokenMasked && (
+                  <p className="font-mono text-purple-700 dark:text-purple-300">
+                    Token no Render: <strong>{gatewayDiagnostic.tokenMasked}</strong>
+                  </p>
+                )}
+                {gatewayDiagnostic.clientName && (
+                  <p>
+                    Titular da Conta: <strong>{gatewayDiagnostic.clientName}</strong>
+                  </p>
+                )}
+                {gatewayDiagnostic.tokenValido && (
+                  <span className="inline-flex items-center text-emerald-700 dark:text-emerald-300 font-bold">
+                    ✓ Autenticação Válida na Infosimples
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] opacity-90 mt-1">{gatewayDiagnostic.mensagem}</p>
+              {gatewayDiagnostic.exigeCnpj ? (
+                <div className="rounded-lg bg-amber-100/70 p-2.5 text-[11px] text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 mt-2 space-y-1">
+                  <p className="font-bold">ℹ️ Requisito Oficial da Infosimples (LGPD & Trânsito):</p>
+                  <p>
+                    A Infosimples não permite consultas de <strong>DETRAN</strong> em contas cadastradas como <strong>Pessoa Física (CPF)</strong>. Para obter dados reais de proprietários e multas estaduais, você deve utilizar uma conta empresarial de <strong>Pessoa Jurídica (CNPJ) com e-mail corporativo</strong> no painel da Infosimples.
+                  </p>
+                  <p className="text-[10px] opacity-80">
+                    Enquanto estiver utilizando a conta de Pessoa Física, o sistema permite testar todo o fluxo do ERP utilizando a base de homologação/sandbox de alta fidelidade.
+                  </p>
+                </div>
+              ) : !gatewayDiagnostic.sucesso && (
                 <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-1">
                   💡 Dica: Verifique se o token copiado no painel da Infosimples está completo e se sua conta possui saldo/créditos ativos de consulta.
                 </p>

@@ -58,19 +58,25 @@ export class DetranService {
     const cleanPlaca = placa.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     const cleanRenavam = (renavam || '').trim();
 
-    // Endpoint oficial da Infosimples para débitos e dados cadastrais do Detran
-    const url = `https://api.infosimples.com/api/v2/consultas/detran/${cleanUf}/debitos-restricoes`;
-    this.logger.log(`[Infosimples Gateway] Disparando POST para ${url} | Placa: ${cleanPlaca}`);
+    // Endpoints oficiais da API v2 da Infosimples (conforme catálogo apis.json)
+    // Para SP: detran/sp/debitos. Para nacional unificado: detran/restricoes
+    const url = cleanUf === 'sp'
+      ? 'https://api.infosimples.com/api/v2/consultas/detran/sp/debitos'
+      : 'https://api.infosimples.com/api/v2/consultas/detran/restricoes';
+
+    this.logger.log(`[Infosimples Gateway] Disparando POST para ${url} | UF: ${cleanUf.toUpperCase()} | Placa: ${cleanPlaca}`);
 
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',
         },
         body: JSON.stringify({
           token,
+          uf: cleanUf.toUpperCase(),
           placa: cleanPlaca,
           renavam: cleanRenavam,
           timeout: 60,
@@ -78,16 +84,17 @@ export class DetranService {
       });
 
       const json = await response.json();
-      this.logger.log(`[Infosimples Gateway] Resposta recebida: Código ${json.code} - ${json.code_message}`);
+      this.logger.log(`[Infosimples Gateway] Resposta: Código ${json.code} - ${json.code_message}`);
 
       if (json.code === 200 && json.data && json.data.length > 0) {
         return json.data[0];
       }
 
-      // Se a Infosimples retornou código de erro (601: token inválido, 608: saldo insuficiente, 605: timeout, etc.)
+      // Se a Infosimples retornou código de erro ou bloqueio por conta CPF
       if (json.code !== 200) {
+        const detalhes = json.errors && json.errors.length > 0 ? ` (${json.errors.join('; ')})` : '';
         throw new BadRequestException(
-          `Infosimples: ${json.code_message || 'Erro na consulta do veículo'} (Código ${json.code})`
+          `Infosimples: ${json.code_message || 'Erro na consulta do veículo'}${detalhes} [Código ${json.code}]`
         );
       }
 
@@ -262,7 +269,7 @@ export class DetranService {
   }
 
   /**
-   * Endpoint de teste para diagnosticar o token da Infosimples
+   * Endpoint de teste para diagnosticar o token da Infosimples e permissões de DETRAN
    */
   async testGatewayToken() {
     const token = this.getGatewayToken();
@@ -274,26 +281,79 @@ export class DetranService {
       };
     }
 
-    const tokenMasked = token.length > 8 ? `${token.substring(0, 4)}...${token.substring(token.length - 4)}` : '***';
+    const tokenMasked = token.length > 8 ? `${token.substring(0, 7)}...${token.substring(token.length - 4)}` : '***';
 
     try {
-      const url = 'https://api.infosimples.com/api/v2/consultas/detran/sp/debitos-restricoes';
-      const res = await fetch(url, {
+      // 1. Valida autenticação e titularidade da conta na Infosimples
+      let clientName = 'Não identificado';
+      let tokenValido = false;
+      let balanceActive = false;
+
+      try {
+        const pingRes = await fetch('https://api.infosimples.com/api/v2/consultas/receita-federal/cnpj', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, cnpj: '00000000000191' }),
+        });
+        const pingJson = await pingRes.json();
+        if (pingJson.code === 200 || pingJson.code === 608) {
+          tokenValido = true;
+          balanceActive = pingJson.code === 200;
+          clientName = pingJson.header?.client_name || pingJson.header?.token_name || clientName;
+        } else if (pingJson.code === 601) {
+          return {
+            sucesso: false,
+            tokenConfigurado: true,
+            tokenMasked,
+            codigo: 601,
+            mensagem: 'Token inválido ou não reconhecido pela Infosimples.',
+          };
+        }
+      } catch (err: any) {
+        this.logger.warn(`Erro no ping básico da Infosimples: ${err.message}`);
+      }
+
+      // 2. Testa permissão específica do serviço de DETRAN
+      const detranRes = await fetch('https://api.infosimples.com/api/v2/consultas/detran/restricoes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ token, placa: 'BRA2E19', renavam: '12345678901' }),
+        body: JSON.stringify({ token, uf: 'SP', placa: 'BRA2E19', renavam: '12345678901' }),
       });
-      const json = await res.json();
+      const detranJson = await detranRes.json();
+
+      if (detranJson.code === 200) {
+        return {
+          sucesso: true,
+          tokenConfigurado: true,
+          tokenValido: true,
+          detranLiberado: true,
+          clientName,
+          tokenMasked,
+          codigo: 200,
+          mensagem: 'Conexão com a Infosimples 100% ativa e autorizada para consultas de DETRAN!',
+        };
+      }
+
+      // Caso clássico: Conta de Pessoa Física (CPF) na Infosimples
+      const isCpfAccount = detranJson.code === 603 &&
+        detranJson.errors?.some((e: string) => e.toLowerCase().includes('pessoa física') || e.toLowerCase().includes('cpf'));
+
       return {
-        sucesso: json.code === 200,
+        sucesso: false,
         tokenConfigurado: true,
+        tokenValido: true,
+        detranLiberado: false,
+        exigeCnpj: isCpfAccount,
+        clientName: detranJson.header?.client_name || clientName,
         tokenMasked,
-        codigo: json.code,
-        mensagem: json.code_message || 'Sem mensagem do gateway',
-        header: json.header,
+        codigo: detranJson.code,
+        mensagem: isCpfAccount
+          ? 'Token autenticado com sucesso! Porém, a Infosimples exige uma conta de Pessoa Jurídica (CNPJ) para liberar o acesso aos DETRANs.'
+          : (detranJson.code_message || 'Erro ao validar serviço do DETRAN'),
+        erros: detranJson.errors || [],
       };
     } catch (e: any) {
       return {

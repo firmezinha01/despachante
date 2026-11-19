@@ -55,4 +55,10 @@ export class DetranController {
   async getStatus() {
     return this.detranService.getStatus();
   }
+
+  @Get('test-gateway')
+  @ApiOperation({ summary: 'Diagnosticar e testar conexão com o token da Infosimples em tempo real' })
+  async testGateway() {
+    return this.detranService.testGatewayToken();
+  }
 }

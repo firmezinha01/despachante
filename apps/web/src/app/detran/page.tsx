@@ -11,6 +11,8 @@ import {
   FileText,
   KeyRound,
   ExternalLink,
+  Activity,
+  AlertCircle,
 } from 'lucide-react';
 import { formatBrl } from '@/lib/utils';
 import { fetchApi } from '@/lib/api-client';
@@ -24,6 +26,8 @@ export default function DetranPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusInfo, setStatusInfo] = useState<any>(null);
   const [guiaEmitida, setGuiaEmitida] = useState<any>(null);
+  const [testingGateway, setTestingGateway] = useState(false);
+  const [gatewayDiagnostic, setGatewayDiagnostic] = useState<any>(null);
 
   const [result, setResult] = useState<any>({
     consultado: true,
@@ -100,6 +104,19 @@ export default function DetranPage() {
     }
   };
 
+  const handleTestGateway = async () => {
+    setTestingGateway(true);
+    setGatewayDiagnostic(null);
+    try {
+      const res = await fetchApi('/detran/test-gateway');
+      setGatewayDiagnostic(res);
+    } catch (err: any) {
+      setGatewayDiagnostic({ sucesso: false, mensagem: err.message });
+    } finally {
+      setTestingGateway(false);
+    }
+  };
+
   const handleEmitirGuia = async () => {
     setLoadingGuia(true);
     try {
@@ -136,8 +153,8 @@ export default function DetranPage() {
           </p>
         </div>
 
-        {/* Badge de Conexão com Gateway */}
-        <div className="flex items-center gap-2">
+        {/* Badge de Conexão com Gateway e Diagnóstico */}
+        <div className="flex flex-wrap items-center gap-2">
           <div className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-bold border ${
             statusInfo?.gatewayConectado
               ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
@@ -145,15 +162,62 @@ export default function DetranPage() {
           }`}>
             <Radio className={`h-3.5 w-3.5 ${statusInfo?.gatewayConectado ? 'text-emerald-500 animate-pulse' : 'text-purple-600'}`} />
             <span>
-              {statusInfo?.modoOperacao === 'PRODUCAO_REAL' ? 'API Gateway DETRAN: Produção Real' : 'Ambiente: Homologação / Sandbox Ativo'}
+              {statusInfo?.gatewayConectado ? 'Gateway Infosimples: Configurado' : 'Ambiente: Sandbox / Sem Token'}
             </span>
           </div>
+
+          <button
+            onClick={handleTestGateway}
+            disabled={testingGateway}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 shadow-xs transition"
+          >
+            <Activity className="h-3.5 w-3.5 text-purple-600" />
+            {testingGateway ? 'Testando Token...' : 'Testar Token Infosimples'}
+          </button>
         </div>
       </div>
 
+      {/* Diagnóstico do Token */}
+      {gatewayDiagnostic && (
+        <div
+          className={`rounded-xl border p-4 text-xs font-semibold ${
+            gatewayDiagnostic.sucesso
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300'
+              : 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300'
+          }`}
+        >
+          <div className="flex items-start gap-2.5">
+            {gatewayDiagnostic.sucesso ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            )}
+            <div className="space-y-1">
+              <p className="font-bold">
+                {gatewayDiagnostic.sucesso
+                  ? 'Conexão com a Infosimples bem-sucedida! O token é válido.'
+                  : `Retorno da Infosimples (Código ${gatewayDiagnostic.codigo || 'Erro'}):`}
+              </p>
+              {gatewayDiagnostic.tokenMasked && (
+                <p className="text-[11px] font-mono text-purple-700 dark:text-purple-300">
+                  Token detectado no Render: <strong>{gatewayDiagnostic.tokenMasked}</strong>
+                </p>
+              )}
+              <p className="text-[11px] opacity-90">{gatewayDiagnostic.mensagem}</p>
+              {!gatewayDiagnostic.sucesso && (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-1">
+                  💡 Dica: Verifique se o token copiado no painel da Infosimples está completo e se sua conta possui saldo/créditos ativos de consulta.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
-          {error}
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
       )}
 
@@ -210,7 +274,7 @@ export default function DetranPage() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 p-2.5 text-xs sm:text-sm font-bold text-white shadow-lg shadow-purple-600/30 hover:bg-purple-700 transition disabled:opacity-50"
             >
               <Search className="h-4 w-4" />
-              {loading ? 'Consultando API...' : 'Consultar na Base'}
+              {loading ? 'Consultando na API...' : 'Consultar no DETRAN'}
             </button>
           </div>
         </div>
@@ -358,14 +422,10 @@ export default function DetranPage() {
           <KeyRound className="h-5 w-5 text-purple-600 mt-0.5 shrink-0" />
           <div className="space-y-1 text-xs">
             <h4 className="font-bold text-slate-900 dark:text-white">
-              Como ativar as consultas reais das 27 UFs do DETRAN & SENATRAN?
+              Integração com a API Infosimples Ativa
             </h4>
             <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-              Para efetuar consultas em tempo real de qualquer veículo do Brasil, adicione a variável de ambiente{' '}
-              <code className="rounded bg-purple-100 px-1 py-0.5 font-mono text-[11px] font-bold text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                DETRAN_GATEWAY_TOKEN
-              </code>{' '}
-              no painel do <strong>Render</strong> com a chave de API do seu provedor (ex: Infosimples, Assertiva, Infocar, ou credenciais SERPRO BIN/RENAVE). Enquanto a variável não for informada, o sistema opera automaticamente em modo Sandbox com respostas estruturadas de alta fidelidade.
+              O sistema se comunica diretamente com a API v2 da <strong>Infosimples</strong> (<code>https://api.infosimples.com/api/v2/consultas/detran/.../debitos-restricoes</code>) utilizando o token configurado no Render em <code>DETRAN_GATEWAY_TOKEN</code>. Clique no botão <strong>Testar Token Infosimples</strong> acima para diagnosticar o status do seu token e conferir se sua conta está autorizada para consultas estaduais.
             </p>
           </div>
         </div>
